@@ -258,11 +258,21 @@ fn query_param<'a>(url: &'a str, key: &str) -> Option<&'a str> {
 // --- /proc/self/oom_score_adj helpers ---
 
 fn write_oom_score_adj_self(value: &str) {
-    if let Ok(mut f) = OpenOptions::new()
+    // Lowering oom_score_adj needs CAP_SYS_RESOURCE. Without it the write is
+    // refused and this server stays at the kubelet's -997 for Guaranteed pods,
+    // three short of the -1000 that cgroup v2 exempts from memory.oom.group --
+    // so a container OOM takes the server down with the step and the job
+    // reports a bare exit 137. Say so rather than failing silently.
+    match OpenOptions::new()
         .write(true)
         .open("/proc/self/oom_score_adj")
+        .and_then(|mut f| f.write_all(value.as_bytes()))
     {
-        let _ = f.write_all(value.as_bytes());
+        Ok(()) => {}
+        Err(e) => eprintln!(
+            "rpc-server: could not set oom_score_adj={value} ({e}); \
+             a container OOM will kill this server too"
+        ),
     }
 }
 

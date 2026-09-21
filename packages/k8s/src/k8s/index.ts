@@ -336,6 +336,24 @@ export async function createJobPod(
 ): Promise<k8s.V1Pod> {
   const containers: k8s.V1Container[] = []
   if (jobContainer) {
+    // The rpc-server lowers its own oom_score_adj to -1000 at startup, which is
+    // the only value cgroup v2 exempts from a memory.oom.group kill. Without
+    // that exemption a single runaway step kills the whole cgroup, rpc-server
+    // included, and the job reports a bare exit 137 with no output because the
+    // reporter died with it. Lowering oom_score_adj needs CAP_SYS_RESOURCE; the
+    // write is silently refused without it, which is exactly what happens
+    // today. Nothing else in the pod gains privilege: children are reset to 0
+    // in spawn_job's pre_exec, so the step's own processes stay killable.
+    jobContainer.securityContext = {
+      ...(jobContainer.securityContext ?? {}),
+      capabilities: {
+        ...(jobContainer.securityContext?.capabilities ?? {}),
+        add: [
+          ...(jobContainer.securityContext?.capabilities?.add ?? []),
+          'SYS_RESOURCE'
+        ]
+      }
+    }
     containers.push(jobContainer)
   }
   if (services?.length) {
