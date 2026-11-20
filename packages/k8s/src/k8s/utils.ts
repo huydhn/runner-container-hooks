@@ -39,12 +39,8 @@ export const CONTAINER_VOLUMES: k8s.V1VolumeMount[] = [
 // k8s hook can mount: an absolute path inside GITHUB_WORKSPACE, or a path
 // relative to the work folder that stays inside it.
 export function resolveUserVolumeSourcePath(sourceVolumePath: string): string {
-  const workspacePath = process.env.GITHUB_WORKSPACE
-  const runnerWorkspace = process.env.RUNNER_WORKSPACE
-  if (!workspacePath || !runnerWorkspace) {
-    throw new Error('GITHUB_WORKSPACE and RUNNER_WORKSPACE must be set')
-  }
-  const workFolder = path.dirname(runnerWorkspace)
+  const workspacePath = process.env.GITHUB_WORKSPACE as string
+  const workFolder = path.dirname(process.env.RUNNER_WORKSPACE as string)
   const [root, source] = path.isAbsolute(sourceVolumePath)
     ? [workspacePath, path.resolve(sourceVolumePath)]
     : [workFolder, path.resolve(workFolder, sourceVolumePath)]

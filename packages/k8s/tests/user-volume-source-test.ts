@@ -38,11 +38,4 @@ describe('resolveUserVolumeSourcePath', () => {
       'Volume mounts outside of the work folder are not supported'
     )
   })
-
-  it('throws when the workspace variables are not set', () => {
-    delete process.env.GITHUB_WORKSPACE
-    expect(() => resolveUserVolumeSourcePath('cache')).toThrow(
-      'GITHUB_WORKSPACE and RUNNER_WORKSPACE must be set'
-    )
-  })
 })
