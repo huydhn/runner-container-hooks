@@ -1,5 +1,6 @@
 import * as k8s from '@kubernetes/client-node'
 import * as fs from 'fs'
+import * as path from 'path'
 import * as yaml from 'js-yaml'
 import * as core from '@actions/core'
 import { v1 as uuidv4 } from 'uuid'
@@ -31,6 +32,34 @@ export const CONTAINER_VOLUMES: k8s.V1VolumeMount[] = [
     mountPath: '/github'
   }
 ]
+
+// The job pod gets container.volumes sources by copying them from the runner
+// pod, so an unchecked source would copy any runner pod file, such as its
+// service account token, into the job pod. Accept only what the volume-based
+// k8s hook can mount: an absolute path inside GITHUB_WORKSPACE, or a path
+// relative to the work folder that stays inside it.
+export function resolveUserVolumeSourcePath(sourceVolumePath: string): string {
+  const workspacePath = process.env.GITHUB_WORKSPACE
+  const runnerWorkspace = process.env.RUNNER_WORKSPACE
+  if (!workspacePath || !runnerWorkspace) {
+    throw new Error('GITHUB_WORKSPACE and RUNNER_WORKSPACE must be set')
+  }
+  const workFolder = path.dirname(runnerWorkspace)
+  const [root, source] = path.isAbsolute(sourceVolumePath)
+    ? [workspacePath, path.resolve(sourceVolumePath)]
+    : [workFolder, path.resolve(workFolder, sourceVolumePath)]
+  const relative = path.relative(root, source)
+  if (
+    relative === '..' ||
+    relative.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relative)
+  ) {
+    throw new Error(
+      'Volume mounts outside of the work folder are not supported'
+    )
+  }
+  return source
+}
 
 export function prepareJobScript(userVolumeMounts: Mount[]): {
   containerPath: string
