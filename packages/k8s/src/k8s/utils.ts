@@ -44,7 +44,10 @@ export function resolveUserVolumeSourcePath(sourceVolumePath: string): string {
   const [root, source] = path.isAbsolute(sourceVolumePath)
     ? [workspacePath, path.resolve(sourceVolumePath)]
     : [workFolder, path.resolve(workFolder, sourceVolumePath)]
-  const relative = path.relative(root, source)
+  // Compare real paths: tar follows symlinked directories in the source
+  // path, as kubelet's subPath check does for the volume-based hook.
+  const realSource = fs.realpathSync(source)
+  const relative = path.relative(fs.realpathSync(root), realSource)
   if (
     relative === '..' ||
     relative.startsWith(`..${path.sep}`) ||
@@ -54,7 +57,7 @@ export function resolveUserVolumeSourcePath(sourceVolumePath: string): string {
       'Volume mounts outside of the work folder are not supported'
     )
   }
-  return source
+  return realSource
 }
 
 export function prepareJobScript(userVolumeMounts: Mount[]): {
